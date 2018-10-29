@@ -51,10 +51,46 @@ class SpeedCallback(event.EventCallback):
             #hexValues = binascii.hexlify(msg.payload)
             #print( "id:{} value:{} type:{}".format(message.number, hexValues, type(msg) ) )
             print(hexValues)
+            curr_speed_rev_count = int(str(binascii.hexlify(msg.payload[8])) + str(binascii.hexlify(msg.payload[7])), 16)
+            print('Speed Rev Count: {}'.format(curr_speed_rev_count))
+            curr_speed_event_time = int(str(binascii.hexlify(msg.payload[6])) + str(binascii.hexlify(msg.payload[5])), 16)
+            print('Speed Event Time (1024): {}'.format(curr_speed_event_time))
+
+            print('Page ID: {} Stop Bit: {}'.format(ord(msg.payload[1]), ord(msg.payload[2])))
+
+            stop_bit = ord(msg.payload[2])
+            #Only update speed value when stop bit = 0 which means bike is moving
+
             cacheLocation = '/home/aws_cam/diskcachedir'
-            with Cache(cacheLocation) as cache:
-                cache[b'speed'] = ord(msg.payload[8])
-                print('Cached speed: {}'.format(cache[b'speed']))
+
+            if stop_bit == 0:
+
+                with Cache(cacheLocation) as cache:
+                    prev_speed_rev_count = cache.get(b'prevspdrevcount', curr_speed_rev_count - 1)
+                    prev_speed_event_time = cache.get(b'prevspdevttime', curr_speed_event_time - 1)
+
+                    cache[b'prevspdrevcount'] = curr_speed_rev_count
+                    cache[b'prevspdevttime'] = curr_speed_event_time
+
+                    delta_speed_rev_count = curr_speed_rev_count - prev_speed_rev_count
+                    delta_speed_event_time = curr_speed_event_time - prev_speed_event_time
+
+                    print('Delta Rev Count: {} , Delta Evt Time: {}'.format(delta_speed_rev_count, delta_speed_event_time))
+
+                    #avoid divide-by-zero errors; only re-calculate speed if input values greater than zero
+
+                    if delta_speed_rev_count > 0 and delta_speed_event_time > 0:
+                        #736mm = 29 inch circumfrence wheel
+                        calc_speed = (delta_speed_rev_count * 0.736 * 1024)/delta_speed_event_time
+                        kmh = int((calc_speed * 60 * 60) / 1000)
+                        print('Calc Speed [m/s]: {}, KMH: {}'.format(str(calc_speed), str(kmh)))
+                        cache[b'speed'] = str(kmh)
+                        print('Cached speed: {} \n =====\n'.format(cache[b'speed']))
+            else:
+                #Otherwise our speed is zero km/h (bike not moving)
+                with Cache(cacheLocation) as cache:
+                    cache[b'speed'] = str(0)
+                    print('Cached speed: {} \n =====\n'.format(cache[b'speed']))
 
 
 class HRM(event.EventCallback):
