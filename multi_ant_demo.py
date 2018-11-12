@@ -265,15 +265,4 @@ with HRM(serial=SERIAL, netkey=NETKEY) as hrm:
         try:
             time.sleep(1)
         except KeyboardInterrupt:
-            cache_location = '/home/aws_cam/diskcachedir'
-            with Cache(cache_location) as cache:
-                cache[b'speed'] = 0
-                cache[b'prevspdrevcount'] = 0
-                cache[b'prevspdevttime'] = 0
-                cache[b'prevcadrevcount'] = 0
-                cache[b'prevcadevttime'] = 0
-                cache[b'cadence'] = 0
-                cache[b'heartrate'] = 0
-                cache[b'temperature'] = 0
-
             sys.exit(0)
