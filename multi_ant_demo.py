@@ -26,6 +26,27 @@ class HeartrateCallback(event.EventCallback):
                 cache[b'heartrate'] = ord(msg.payload[8])
                 print('Cached heartrate: {}'.format(cache[b'heartrate']))
 
+class TemperatureCallback(event.EventCallback):
+    def process(self, msg):
+        if isinstance(msg, message.ChannelBroadcastDataMessage):
+            print('Temperature: received message')
+            #print(len(msg.payload))
+            hexValues = ''.join(['[{}] '.format(str(binascii.hexlify(b))) for b in msg.payload])
+            #hexValues = binascii.hexlify(msg.payload)
+            #print( "id:{} value:{} type:{}".format(message.number, hexValues, type(msg) ) )
+            print(hexValues)
+
+            print('Temperature Page ID: {}'.format(ord(msg.payload[1])))
+
+            if ord(msg.payload[1]) == 1:
+                current_temperature = 32 + (1.8 * (0.01 * int(str(binascii.hexlify(msg.payload[8])) + str(binascii.hexlify(msg.payload[7])),16)))
+                print('Current Page1 Temnperature: {}'.format(current_temperature))
+
+                cacheLocation = '/home/aws_cam/diskcachedir'
+                with Cache(cacheLocation) as cache:
+                    cache[b'temperature'] = current_temperature
+                    print('Cached temperature: {}'.format(cache[b'temperature']))
+
 
 class CadenceCallback(event.EventCallback):
     def process(self, msg):
@@ -133,6 +154,7 @@ class HRM(event.EventCallback):
         self.channel = None
         self.channel2 = None
         self.channel3 = None
+        self.channel4 = None
 
     def start(self):
         print("starting node")
@@ -141,18 +163,26 @@ class HRM(event.EventCallback):
         self.channel.registerCallback(CadenceCallback())
         self.channel2.registerCallback(SpeedCallback())
         self.channel3.registerCallback(HeartrateCallback())
+        self.channel4.registerCallback(TemperatureCallback())
         print("start listening for device events")
 
     def stop(self):
         if self.channel:
             self.channel.close()
             self.channel.unassign()
+
         if self.channel2:
             self.channel2.close()
             self.channel2.unassign()
+
         if self.channel3:
             self.channel3.close()
             self.channel3.unassign()
+
+        if self.channel4:
+            self.channel4.close()
+            self.channel4.unassign()
+
         if self.antnode:
             self.antnode.stop()
 
@@ -174,7 +204,8 @@ class HRM(event.EventCallback):
     def _setup_channel(self):
         key = node.NetworkKey('N:ANT+', self.netkey)
         self.antnode.setNetworkKey(0, key)
-        
+
+        #Cadence channel
         self.channel = self.antnode.getFreeChannel()
         self.channel.name = 'C:CAD'
         self.channel.assign('N:ANT+', CHANNEL_TYPE_TWOWAY_RECEIVE)
@@ -184,7 +215,7 @@ class HRM(event.EventCallback):
         self.channel.setFrequency(57)
         self.channel.open()
 
-        #Channel 2 settings
+        #Channel 2 - Speed
         self.channel2 = self.antnode.getFreeChannel()
         self.channel2.name = 'C:SPD'
         self.channel2.assign('N:ANT+', CHANNEL_TYPE_TWOWAY_RECEIVE)
@@ -194,7 +225,7 @@ class HRM(event.EventCallback):
         self.channel2.setFrequency(57) 
         self.channel2.open()
 
-        #Channel 3 settings
+        #Channel 3  - Heartrate
         self.channel3 = self.antnode.getFreeChannel()
         self.channel3.name = 'C:HR'
         self.channel3.assign('N:ANT+', CHANNEL_TYPE_TWOWAY_RECEIVE)
@@ -203,6 +234,16 @@ class HRM(event.EventCallback):
         self.channel3.setPeriod(8070)
         self.channel3.setFrequency(57)
         self.channel3.open()
+
+        #Channel 4  - Temperature
+        self.channel4 = self.antnode.getFreeChannel()
+        self.channel4.name = 'C:TMP'
+        self.channel4.assign('N:ANT+', CHANNEL_TYPE_TWOWAY_RECEIVE)
+        self.channel4.setID(25, 0, 0)
+        self.channel4.setSearchTimeout(TIMEOUT_NEVER)
+        self.channel4.setPeriod(8192)
+        self.channel4.setFrequency(57)
+        self.channel4.open()
 
 SERIAL = '/dev/ttyUSB0'
 NETKEY = 'B9A521FBBD72C345'.decode('hex')
@@ -222,5 +263,6 @@ with HRM(serial=SERIAL, netkey=NETKEY) as hrm:
                 cache[b'prevcadevttime'] = 0
                 cache[b'cadence'] = 0
                 cache[b'heartrate'] = 0
+                cache[b'temperature'] = 0
 
             sys.exit(0)
