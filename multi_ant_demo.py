@@ -58,40 +58,44 @@ class CadenceCallback(event.EventCallback):
             #print( "id:{} value:{} type:{}".format(message.number, hexValues, type(msg) ) )
             print(hexValues)
 
-            curr_cad_rev_count = int(str(binascii.hexlify(msg.payload[8])) + str(binascii.hexlify(msg.payload[7])), 16)
-            print('Cadence Rev Count: {}'.format(curr_cad_rev_count))
-            curr_cad_event_time = int(str(binascii.hexlify(msg.payload[6])) + str(binascii.hexlify(msg.payload[5])), 16)
-            print('Cadence Event Time: {}'.format(curr_cad_event_time))
+            print('Cadence Data Page Ord: {} '.format(ord(msg.payload[1])))
 
-            #Stop bit doesn't seem to exist for the Garmin cadence sensor
-            #print('Cadence Page ID: {} Stop Bit: {}'.format(ord(msg.payload[1]), ord(msg.payload[2])))
+            #Only process data page 128 data
+            if ord(msg.payload[1]) == 128:
+                curr_cad_rev_count = int(str(binascii.hexlify(msg.payload[8])) + str(binascii.hexlify(msg.payload[7])), 16)
+                print('Cadence Rev Count: {}'.format(curr_cad_rev_count))
+                curr_cad_event_time = int(str(binascii.hexlify(msg.payload[6])) + str(binascii.hexlify(msg.payload[5])), 16)
+                print('Cadence Event Time: {}'.format(curr_cad_event_time))
 
-            cache_location = '/home/aws_cam/diskcachedir'
+                #Stop bit doesn't seem to exist for the Garmin cadence sensor
+                #print('Cadence Page ID: {} Stop Bit: {}'.format(ord(msg.payload[1]), ord(msg.payload[2])))
 
-            with Cache(cache_location) as cache:
-                prev_cad_rev_count = cache.get(b'prevcadrevcount', curr_cad_rev_count - 1)
-                prev_cad_event_time = cache.get(b'prevcadevttime', curr_cad_event_time - 1)
+                cacheLocation = '/home/aws_cam/diskcachedir'
 
-                cache[b'prevcadrevcount'] = curr_cad_rev_count
-                cache[b'prevcadevttime'] = curr_cad_event_time
+                with Cache(cacheLocation) as c:
+                    prev_cad_rev_count = c.get(b'prevcadrevcount', 0)
+                    prev_cad_event_time = c.get(b'prevcadevttime', 0)
 
-                delta_cad_rev_count = curr_cad_rev_count - prev_cad_rev_count
-                delta_cad_event_time = curr_cad_event_time - prev_cad_event_time
+                    c[b'prevcadrevcount'] = curr_cad_rev_count
+                    c[b'prevcadevttime'] = curr_cad_event_time
 
-                print('Cadence Delta Rev Count: {} , Cadence Delta Evt Time: {}'.format(delta_cad_rev_count, delta_cad_event_time))
+                    delta_cad_rev_count = curr_cad_rev_count - prev_cad_rev_count
+                    delta_cad_event_time = curr_cad_event_time - prev_cad_event_time
 
-                #avoid divide-by-zero errors; only re-calculate speed if input values greater than zero
+                    print('Cadence Delta Rev Count: {} , Cadence Delta Evt Time: {}'.format(delta_cad_rev_count, delta_cad_event_time))
 
-                if delta_cad_event_time > 0:
-                    rpm = (delta_cad_rev_count * 60 * 1024)/delta_cad_event_time
+                    #avoid divide-by-zero errors; only re-calculate speed if input values greater than zero
 
-                    print('Calc Cadence [RPM]: {}'.format(str(rpm)))
-                    cache[b'cadence'] = str(rpm)
-                    print('Cached cadence (modified): {} \n =====\n'.format(cache[b'cadence']))
-                else:
-                    #save as a string to return a Truthy value
-                    cache[b'cadence'] = str(0)
-                    print('Cached cadence (no new data): {} \n =====\n'.format(cache[b'cadence']))
+                    if delta_cad_event_time > 0:
+                        rpm = (delta_cad_rev_count * 60 * 1024)/delta_cad_event_time
+
+                        print('Calc Cadence [RPM]: {}'.format(str(rpm)))
+                        c[b'cadence'] = str(rpm)
+                        print('Cached cadence (modified): {} \n =====\n'.format(c[b'cadence']))
+                    else:
+                        #save as a string to return a Truthy value
+                        c[b'cadence'] = str(0)
+                        print('Cached cadence (no new data): {} \n =====\n'.format(c[b'cadence']))
 
 
 class SpeedCallback(event.EventCallback):
@@ -103,46 +107,53 @@ class SpeedCallback(event.EventCallback):
             #hexValues = binascii.hexlify(msg.payload)
             #print( "id:{} value:{} type:{}".format(message.number, hexValues, type(msg) ) )
             print(hexValues)
-            curr_speed_rev_count = int(str(binascii.hexlify(msg.payload[8])) + str(binascii.hexlify(msg.payload[7])), 16)
-            print('Speed Rev Count: {}'.format(curr_speed_rev_count))
-            curr_speed_event_time = int(str(binascii.hexlify(msg.payload[6])) + str(binascii.hexlify(msg.payload[5])), 16)
-            print('Speed Event Time (1024): {}'.format(curr_speed_event_time))
 
-            print('Speed Page ID: {} Stop Bit: {}'.format(ord(msg.payload[1]), ord(msg.payload[2])))
 
-            stop_bit = ord(msg.payload[2])
-            #Only update speed value when stop bit = 0 which means bike is moving
+            #Only process data page 5 data
+            if ord(msg.payload[1]) == 5:
+                curr_speed_rev_count = int(str(binascii.hexlify(msg.payload[8])) + str(binascii.hexlify(msg.payload[7])), 16)
+                print('Speed Rev Count: {}'.format(curr_speed_rev_count))
+                curr_speed_event_time = int(str(binascii.hexlify(msg.payload[6])) + str(binascii.hexlify(msg.payload[5])), 16)
+                print('Speed Event Time (1024): {}'.format(curr_speed_event_time))
 
-            cacheLocation = '/home/aws_cam/diskcachedir'
+                print('Speed Page ID: {} Stop Bit: {}'.format(ord(msg.payload[1]), ord(msg.payload[2])))
 
-            if stop_bit == 0:
+                stop_bit = ord(msg.payload[2])
+                #Only update speed value when stop bit = 0 which means bike is moving
 
-                with Cache(cacheLocation) as cache:
-                    prev_speed_rev_count = cache.get(b'prevspdrevcount', curr_speed_rev_count - 1)
-                    prev_speed_event_time = cache.get(b'prevspdevttime', curr_speed_event_time - 1)
+                cacheLocation = '/home/aws_cam/diskcachedir'
 
-                    cache[b'prevspdrevcount'] = curr_speed_rev_count
-                    cache[b'prevspdevttime'] = curr_speed_event_time
+                #false (zero) bit value means bike is in motion
+                if stop_bit == 0:
 
-                    delta_speed_rev_count = curr_speed_rev_count - prev_speed_rev_count
-                    delta_speed_event_time = curr_speed_event_time - prev_speed_event_time
+                    with Cache(cacheLocation) as c:
+                        prev_speed_rev_count = c.get(b'prevspdrevcount', 0)
+                        prev_speed_event_time = c.get(b'prevspdevttime', 0)
 
-                    print('Delta Rev Count: {} , Delta Evt Time: {}'.format(delta_speed_rev_count, delta_speed_event_time))
+                        c[b'prevspdrevcount'] = curr_speed_rev_count
+                        c[b'prevspdevttime'] = curr_speed_event_time
 
-                    #avoid divide-by-zero errors; only re-calculate speed if input values greater than zero
+                        delta_speed_rev_count = curr_speed_rev_count - prev_speed_rev_count
+                        delta_speed_event_time = curr_speed_event_time - prev_speed_event_time
 
-                    if delta_speed_rev_count > 0 and delta_speed_event_time > 0:
-                        #736mm = 29 inch circumfrence wheel
-                        calc_speed = (delta_speed_rev_count * 0.736 * 1024)/delta_speed_event_time
-                        kmh = int((calc_speed * 60 * 60) / 1000)
-                        print('Calc Speed [m/s]: {}, KMH: {}'.format(str(calc_speed), str(kmh)))
-                        cache[b'speed'] = str(kmh)
-                        print('Cached speed: {} \n =====\n'.format(cache[b'speed']))
-            else:
-                #Otherwise our speed is zero km/h (bike not moving)
-                with Cache(cacheLocation) as cache:
-                    cache[b'speed'] = str(0)
-                    print('Cached speed: {} \n =====\n'.format(cache[b'speed']))
+                        print('Delta Rev Count: {} , Delta Evt Time: {}'.format(delta_speed_rev_count, delta_speed_event_time))
+
+                        #avoid divide-by-zero errors; only re-calculate speed if input values greater than zero
+
+                        if delta_speed_event_time > 0:
+                            #736mm = 29 inch circumfrence wheel
+                            calc_speed = (delta_speed_rev_count * 0.736 * 1024)/delta_speed_event_time
+                            kmh = int((calc_speed * 60 * 60) / 1000)
+                            print('Calc Speed [m/s]: {}, KMH: {}'.format(str(calc_speed), str(kmh)))
+                            c[b'speed'] = str(kmh)
+                            print('Cached speed: {} \n =====\n'.format(c[b'speed']))
+                else:
+                    #Otherwise our speed is zero km/h (bike not moving)
+                    with Cache(cacheLocation) as c:
+                        c[b'speed'] = str(0)
+                        c[b'prevspdrevcount'] = 0
+                        c[b'prevspdevttime'] = 0
+                        print('Cached speed: {} \n =====\n'.format(c[b'speed']))
 
 
 class HRM(event.EventCallback):
